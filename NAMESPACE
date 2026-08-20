@@ -1,0 +1,4 @@
+useDynLib(caverify, .registration = TRUE)
+export(ca_verify)
+S3method(print, ca_verify)
+importFrom(parallel, detectCores)

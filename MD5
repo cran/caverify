@@ -1,0 +1,11 @@
+846f9ec2c3d4eaf2e804c1e15ca5247e *DESCRIPTION
+260ced80c267427871ba41b33f0f79b3 *LICENSE
+310ea1847cd36d7ccbb95e5de1c2d2f3 *NAMESPACE
+24adb0dccd89fb056bd15367c33dac05 *NEWS.md
+4505dd7ea5fb1b1b573feb44e9eaf1a8 *R/ca_verify.R
+69766f2d91598a6b512e19732c37f225 *inst/WORDLIST
+827a8f459edc9a3d5547179c376e4d76 *man/ca_verify.Rd
+95e3011e37d9dde0d75f3a3819b2acd3 *src/Makevars
+95e3011e37d9dde0d75f3a3819b2acd3 *src/Makevars.win
+09eaf19e44c2d594e7b6dc47200890aa *src/ca_verify.c
+dab6daba6310e20ccda481db42c208c7 *tests/test-ca_verify.R
