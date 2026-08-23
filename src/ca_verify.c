@@ -14,16 +14,25 @@
  *
  * Symbols are expected as 0..v-1 (the R wrapper auto-shifts 1..v input).
  */
+/* Include order matters here. R's headers remap much of the API into the
+ * global namespace unless R_NO_REMAP is defined, and one of those macros
+ * is match -> Rf_match. Clang 22's omp.h uses
+ *   #pragma omp declare variant ... match(...)
+ * so an omp.h seen after the R headers has its match clause rewritten and
+ * no longer parses (r-devel-linux-x86_64-fedora-clang, 2026-08-20).
+ * R_NO_REMAP removes the remap entirely; including omp.h first is kept as
+ * a second line of defence against any other collision of the same kind. */
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
+#define R_NO_REMAP
 #include <R.h>
 #include <Rinternals.h>
 #include <R_ext/Rdynload.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
-
-#ifdef _OPENMP
-#include <omp.h>
-#endif
 
 #define MAX_T 20
 
@@ -75,17 +84,17 @@ static void mark_row(uint64_t *bm, const int *m, int nrow, int r,
 
 SEXP C_ca_verify(SEXP mat, SEXP t_, SEXP v_, SEXP nthreads_, SEXP maxreport_)
 {
-    if (!isInteger(mat) || !isMatrix(mat))
-        error("internal: matrix of integers expected");
+    if (!Rf_isInteger(mat) || !Rf_isMatrix(mat))
+        Rf_error("internal: matrix of integers expected");
     const int *m = INTEGER(mat);
     const int nrow = Rf_nrows(mat), ncol = Rf_ncols(mat);
-    const int t = asInteger(t_), v = asInteger(v_);
-    int nt = asInteger(nthreads_);
-    const int max_ex = asInteger(maxreport_);
+    const int t = Rf_asInteger(t_), v = Rf_asInteger(v_);
+    int nt = Rf_asInteger(nthreads_);
+    const int max_ex = Rf_asInteger(maxreport_);
 
-    if (t < 1 || t > MAX_T) error("t must be in 1..%d", MAX_T);
-    if (v < 2) error("v must be >= 2");
-    if (ncol < t) error("array has fewer columns (%d) than t (%d)", ncol, t);
+    if (t < 1 || t > MAX_T) Rf_error("t must be in 1..%d", MAX_T);
+    if (v < 2) Rf_error("v must be >= 2");
+    if (ncol < t) Rf_error("array has fewer columns (%d) than t (%d)", ncol, t);
     if (nt < 1) nt = 1;
     if (nt > 64) nt = 64;
 
@@ -93,7 +102,7 @@ SEXP C_ca_verify(SEXP mat, SEXP t_, SEXP v_, SEXP nthreads_, SEXP maxreport_)
     for (int i = 0; i < t; i++) {
         vt *= v;
         if (vt > (1LL << 31))
-            error("v^t too large (limit 2^31 tuples per column set)");
+            Rf_error("v^t too large (limit 2^31 tuples per column set)");
     }
     long long mult[MAX_T], mm = 1;
     for (int j = t - 1; j >= 0; j--) { mult[j] = mm; mm *= v; }
@@ -102,7 +111,7 @@ SEXP C_ca_verify(SEXP mat, SEXP t_, SEXP v_, SEXP nthreads_, SEXP maxreport_)
     for (long long i = 0; i < (long long)nrow * ncol; i++) {
         int s = m[i];
         if (s != NA_INTEGER && (s < 0 || s >= v))
-            error("symbol %d out of range 0..%d (after any auto-shift)", s, v - 1);
+            Rf_error("symbol %d out of range 0..%d (after any auto-shift)", s, v - 1);
     }
 
 #ifndef _OPENMP
@@ -190,7 +199,7 @@ SEXP C_ca_verify(SEXP mat, SEXP t_, SEXP v_, SEXP nthreads_, SEXP maxreport_)
     if (n_ex > max_ex) n_ex = max_ex;
 
     /* examples: n_ex x (t cols 1-based, then t tuple symbols 0-based) */
-    SEXP ex = PROTECT(allocMatrix(INTSXP, n_ex, 2 * t));
+    SEXP ex = PROTECT(Rf_allocMatrix(INTSXP, n_ex, 2 * t));
     int *e = INTEGER(ex);
     int row = 0;
     for (int i = 0; i < nt && row < n_ex; i++) {
@@ -210,10 +219,10 @@ SEXP C_ca_verify(SEXP mat, SEXP t_, SEXP v_, SEXP nthreads_, SEXP maxreport_)
     const char *names[] = {"covered", "colsets", "gaps", "missing_tuples",
                            "examples", ""};
     SEXP out = PROTECT(Rf_mkNamed(VECSXP, names));
-    SET_VECTOR_ELT(out, 0, ScalarLogical(gaps == 0));
-    SET_VECTOR_ELT(out, 1, ScalarReal((double)combos));
-    SET_VECTOR_ELT(out, 2, ScalarReal((double)gaps));
-    SET_VECTOR_ELT(out, 3, ScalarReal((double)missing));
+    SET_VECTOR_ELT(out, 0, Rf_ScalarLogical(gaps == 0));
+    SET_VECTOR_ELT(out, 1, Rf_ScalarReal((double)combos));
+    SET_VECTOR_ELT(out, 2, Rf_ScalarReal((double)gaps));
+    SET_VECTOR_ELT(out, 3, Rf_ScalarReal((double)missing));
     SET_VECTOR_ELT(out, 4, ex);
     UNPROTECT(2);
     return out;

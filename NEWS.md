@@ -1,3 +1,13 @@
+# caverify 0.1.3
+
+* Fixed an installation failure on R-devel with clang 22, seen on the
+  CRAN flavour r-devel-linux-x86_64-fedora-clang. The R headers remap
+  `match` to `Rf_match` unless `R_NO_REMAP` is defined, and clang 22's
+  `omp.h` uses `match` as a clause of `#pragma omp declare variant`, so
+  an `omp.h` included after the R headers no longer parsed. `omp.h` is
+  now included first and the C code compiles with `R_NO_REMAP` and the
+  `Rf_` prefixed API. No user-visible change.
+
 # caverify 0.1.2
 
 * Automatic thread selection: by default the checker now uses half the
