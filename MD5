@@ -1,11 +1,11 @@
-65af971d1e80aa4e0e2c0bb27876a0ff *DESCRIPTION
+77a1d0f1275c3ba0539689ecaee9037f *DESCRIPTION
 260ced80c267427871ba41b33f0f79b3 *LICENSE
 310ea1847cd36d7ccbb95e5de1c2d2f3 *NAMESPACE
-538c24a2fd8b49645c225fda0313fd2b *NEWS.md
-4505dd7ea5fb1b1b573feb44e9eaf1a8 *R/ca_verify.R
+c525ae4fbff0774700a73e7a07843f83 *NEWS.md
+5bb6c8efeae24c5a6ab949eb8b8335bd *R/ca_verify.R
 69766f2d91598a6b512e19732c37f225 *inst/WORDLIST
-827a8f459edc9a3d5547179c376e4d76 *man/ca_verify.Rd
+d580483101f3e990f5639188ce1de59b *man/ca_verify.Rd
 95e3011e37d9dde0d75f3a3819b2acd3 *src/Makevars
 95e3011e37d9dde0d75f3a3819b2acd3 *src/Makevars.win
-1b3b00bc46e3af8e239cc5513b2fdde3 *src/ca_verify.c
-dab6daba6310e20ccda481db42c208c7 *tests/test-ca_verify.R
+73f9663dcb13b25c4bcf53ad8f7f5e4e *src/ca_verify.c
+d4b3595f15ff6d67c1940bfd64ee8080 *tests/test-ca_verify.R

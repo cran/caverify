@@ -3,8 +3,14 @@
  *
  * Port of the standalone ca_verify CLI tool (C. Smolen, ca-tools) to a
  * native R entry point: the array arrives as an R integer matrix (no
- * files, no system calls), R's NA_integer_ is the wildcard ("flexible
- * value", counts as every symbol), and results return as an R list.
+ * files, no system calls), R's NA_integer_ marks a flexible
+ * ("don't care") entry, and results return as an R list.
+ *
+ * Mixed-level support (0.2.0): the number of symbols is a per-column
+ * vector vs[0..k-1]; tuple ranks within a column set are mixed-radix
+ * numbers (last column of the set changing fastest, radix vs[c[j]] in
+ * position j). A uniform array is the degenerate case vs[j] == v for
+ * all j and takes the same code path.
  *
  * Threading: optional OpenMP (portable through R's SHLIB_OPENMP_CFLAGS
  * mechanism, including Windows/Rtools); falls back to single-threaded
@@ -56,30 +62,23 @@ static int next_comb(int *c, int k, int t) {
     return 1;
 }
 
-/* mark tuples exhibited by row r on columns c[]; NA = wildcard */
+/* mark the tuple exhibited by row r on columns c[].
+ * NA ("don't care" / flexible value) semantics, 0.2.0: a row with an
+ * NA inside the projection contributes NOTHING to that projection.
+ * Coverage must hold on concrete entries alone, so the array stays
+ * covering no matter how the NAs are later filled. (The 0.1.x
+ * per-tuple wildcard credited one NA with every symbol at once,
+ * which certifies arrays no single filling could make covering;
+ * counterexample due to Ulrike Groemping, 2026-08-23.) */
 static void mark_row(uint64_t *bm, const int *m, int nrow, int r,
-                     const int *c, int t, int v, const long long *mult) {
-    int wpos[MAX_T], nw = 0;
+                     const int *c, int t, const long long *mult) {
     long long base = 0;
     for (int j = 0; j < t; j++) {
         int s = m[r + (long long)c[j] * nrow];
-        if (s == NA_INTEGER) wpos[nw++] = j;
-        else base += (long long)s * mult[j];
+        if (s == NA_INTEGER) return;   /* contributes nothing here */
+        base += (long long)s * mult[j];
     }
-    if (nw == 0) {
-        bm[base >> 6] |= 1ULL << (base & 63);
-        return;
-    }
-    long long nexp = 1;
-    for (int i = 0; i < nw; i++) nexp *= v;
-    for (long long e = 0; e < nexp; e++) {
-        long long idx = base, ee = e;
-        for (int i = 0; i < nw; i++) {
-            idx += (ee % v) * mult[wpos[i]];
-            ee /= v;
-        }
-        bm[idx >> 6] |= 1ULL << (idx & 63);
-    }
+    bm[base >> 6] |= 1ULL << (base & 63);
 }
 
 SEXP C_ca_verify(SEXP mat, SEXP t_, SEXP v_, SEXP nthreads_, SEXP maxreport_)
@@ -88,30 +87,44 @@ SEXP C_ca_verify(SEXP mat, SEXP t_, SEXP v_, SEXP nthreads_, SEXP maxreport_)
         Rf_error("internal: matrix of integers expected");
     const int *m = INTEGER(mat);
     const int nrow = Rf_nrows(mat), ncol = Rf_ncols(mat);
-    const int t = Rf_asInteger(t_), v = Rf_asInteger(v_);
+    const int t = Rf_asInteger(t_);
     int nt = Rf_asInteger(nthreads_);
     const int max_ex = Rf_asInteger(maxreport_);
 
     if (t < 1 || t > MAX_T) Rf_error("t must be in 1..%d", MAX_T);
-    if (v < 2) Rf_error("v must be >= 2");
     if (ncol < t) Rf_error("array has fewer columns (%d) than t (%d)", ncol, t);
+    if (!Rf_isInteger(v_) || Rf_length(v_) != ncol)
+        Rf_error("internal: 'v' must be an integer vector of length ncol");
+    const int *vs = INTEGER(v_);
+    for (int j = 0; j < ncol; j++) {
+        if (vs[j] == NA_INTEGER || vs[j] < 1)
+            Rf_error("number of symbols for column %d must be >= 1", j + 1);
+    }
     if (nt < 1) nt = 1;
     if (nt > 64) nt = 64;
 
-    long long vt = 1;
+    /* worst-case tuples per column set: product of the t largest vs */
+    int *vsrt = (int *) R_alloc((size_t) ncol, sizeof(int));
+    memcpy(vsrt, vs, (size_t) ncol * sizeof(int));
+    for (int i = 0; i < ncol - 1; i++)          /* descending selection sort */
+        for (int j = i + 1; j < ncol; j++)
+            if (vsrt[j] > vsrt[i]) { int h = vsrt[i]; vsrt[i] = vsrt[j]; vsrt[j] = h; }
+    long long vt_max = 1;
     for (int i = 0; i < t; i++) {
-        vt *= v;
-        if (vt > (1LL << 31))
-            Rf_error("v^t too large (limit 2^31 tuples per column set)");
+        vt_max *= vsrt[i];
+        if (vt_max > (1LL << 31))
+            Rf_error("tuples per column set too many (limit 2^31)");
     }
-    long long mult[MAX_T], mm = 1;
-    for (int j = t - 1; j >= 0; j--) { mult[j] = mm; mm *= v; }
 
     /* validate symbol range once, outside the parallel region */
-    for (long long i = 0; i < (long long)nrow * ncol; i++) {
-        int s = m[i];
-        if (s != NA_INTEGER && (s < 0 || s >= v))
-            Rf_error("symbol %d out of range 0..%d (after any auto-shift)", s, v - 1);
+    for (int j = 0; j < ncol; j++) {
+        const int *col = m + (long long) j * nrow;
+        for (int r = 0; r < nrow; r++) {
+            int s = col[r];
+            if (s != NA_INTEGER && (s < 0 || s >= vs[j]))
+                Rf_error("symbol %d in column %d out of range 0..%d (after any auto-shift)",
+                         s, j + 1, vs[j] - 1);
+        }
     }
 
 #ifndef _OPENMP
@@ -130,7 +143,7 @@ SEXP C_ca_verify(SEXP mat, SEXP t_, SEXP v_, SEXP nthreads_, SEXP maxreport_)
         acc[i].ex_tuple = (long long *) R_alloc((size_t)(max_ex > 0 ? max_ex : 1),
                                                 sizeof(long long));
     }
-    const long long words = (vt + 63) >> 6;
+    const long long words = (vt_max + 63) >> 6;
     uint64_t *bms = (uint64_t *) R_alloc((size_t) nt * words, sizeof(uint64_t));
 
     /* Batched enumeration: combinations are collected serially into a
@@ -161,11 +174,17 @@ SEXP C_ca_verify(SEXP mat, SEXP t_, SEXP v_, SEXP nthreads_, SEXP maxreport_)
 #endif
             uint64_t *bm = bms + (size_t) tid * words;
             const int *cc = buf + (size_t) bi * t;
-            memset(bm, 0, words * sizeof(uint64_t));
+            /* mixed-radix multipliers for this column set:
+             * last column changes fastest */
+            long long mult[MAX_T], mm = 1, vt = 1;
+            for (int j = t - 1; j >= 0; j--) { mult[j] = mm; mm *= vs[cc[j]]; }
+            vt = mm;
+            const long long cwords = (vt + 63) >> 6;
+            memset(bm, 0, (size_t) cwords * sizeof(uint64_t));
             for (int r = 0; r < nrow; r++)
-                mark_row(bm, m, nrow, r, cc, t, v, mult);
+                mark_row(bm, m, nrow, r, cc, t, mult);
             long long covered = 0;
-            for (long long i = 0; i < words; i++)
+            for (long long i = 0; i < cwords; i++)
                 covered += __builtin_popcountll(bm[i]);
             Acc *w = &acc[tid];
             w->combos++;
@@ -209,7 +228,10 @@ SEXP C_ca_verify(SEXP mat, SEXP t_, SEXP v_, SEXP nthreads_, SEXP maxreport_)
                     acc[i].ex_cols[(size_t)j * t + q] + 1;
             long long idx = acc[i].ex_tuple[j];
             int digs[MAX_T];
-            for (int q = t - 1; q >= 0; q--) { digs[q] = (int)(idx % v); idx /= v; }
+            for (int q = t - 1; q >= 0; q--) {
+                int vq = vs[acc[i].ex_cols[(size_t)j * t + q]];
+                digs[q] = (int)(idx % vq); idx /= vq;
+            }
             for (int q = 0; q < t; q++)
                 e[row + (long long)(t + q) * n_ex] = digs[q];
         }

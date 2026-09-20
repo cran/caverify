@@ -1,3 +1,38 @@
+# caverify 0.2.0
+
+* The default `v = NULL` now infers per-column symbol counts from each
+  column's own maximum, identical to `v = "auto"`, which remains as an
+  explicit alias. Versions 0.1.x inferred one uniform value from the
+  global data range, which misjudges mixed-level arrays; changed on a
+  recommendation by Ulrike Groemping, since a default should not
+  assume a uniform CA. Declare a scalar `v` where the check should
+  also catch a column that fails to reach its intended symbol count.
+* NA semantics corrected, a breaking change from 0.1.x. An NA marks a
+  flexible ("don't care") entry: a row now contributes nothing to a
+  projection in which it has an NA, so a verified array is covering no
+  matter how its NA entries are later filled. The 0.1.x behaviour let
+  one NA count as every symbol at once, per tuple independently, and
+  could certify arrays that no single choice of values would make
+  covering (a 4-run array passed as a strength-4 covering array on 21
+  four-level columns). Thanks to Ulrike Groemping for the
+  counterexample. The new behaviour also agrees exactly with
+  `CAs::coverage()` on arrays with NAs.
+* Mixed-level covering arrays (MCAs): `v` now also accepts an integer
+  vector of length `ncol(x)` giving each column its own number of
+  symbols, or the string `"auto"` to infer per-column symbol counts
+  from each column's own maximum. Tuple counting and indexing in the C
+  kernel are mixed-radix; a uniform array is the degenerate case and
+  takes the same code path.
+* A scalar `v` behaves exactly as in 0.1.x. The only change for
+  existing callers is the `v = NULL` default described above, which
+  now reads each column's own symbol count. A uniform array with every
+  symbol present in every column verifies identically under both
+  readings.
+* `print` shows mixed-level results with the levels profile in
+  exponent notation (e.g. `levels 4^2 3 2^3`).
+* Tests: mixed-level brute-force oracle plus randomized mixed-level
+  cross-validation added.
+
 # caverify 0.1.3
 
 * Fixed an installation failure on R-devel with clang 22, seen on the

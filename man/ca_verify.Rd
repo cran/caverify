@@ -7,12 +7,23 @@ ca_verify(x, t, v = NULL, threads = NULL, report = 10L)
 }
 \arguments{
   \item{x}{an integer matrix or data frame of integers; rows are runs,
-    columns are factors. \code{NA} entries are wildcards ("flexible
-    values") and count as every symbol.}
+    columns are factors. \code{NA} marks a flexible ("don't care")
+    entry: a row contributes nothing to a projection in which it has
+    an \code{NA}, so a verified array is covering no matter how its
+    \code{NA} entries are later filled.}
   \item{t}{interaction strength to verify (positive integer).}
-  \item{v}{number of symbols per column; if \code{NULL}, inferred from
-    the data range. Symbols may be coded \code{0..v-1} or \code{1..v};
-    1-based input is detected and shifted automatically.}
+  \item{v}{number of symbols. One of: \code{NULL} (the default) to
+    infer per-column symbol counts from each column's own maximum
+    (\code{"auto"} is an explicit alias); a single integer
+    \code{>= 2} declaring a uniform array; or an integer vector of
+    length \code{ncol(x)} giving each column its own number of
+    symbols. Versions 0.1.x inferred one uniform value from the
+    global data range instead; changed on a recommendation by Ulrike
+    Groemping, a default should not assume a uniform CA. Declare
+    \code{v} explicitly when the check should also catch a column
+    that fails to reach its intended number of symbols. Symbols may
+    be coded \code{0..v-1} or \code{1..v} (per column for mixed
+    levels); 1-based input is detected and shifted automatically.}
   \item{threads}{number of threads. \code{NULL} (the default) picks
     automatically: half the machine's logical cores, single-threaded
     for small jobs, capped during CRAN checks. Override with
@@ -25,18 +36,30 @@ ca_verify(x, t, v = NULL, threads = NULL, report = 10L)
   (logical), \code{colsets}, \code{gaps}, \code{missing_tuples},
   \code{examples} (matrix; first \code{t} entries per row are 1-based
   column indices, the rest the missing value combination in the input
-  coding), and \code{t}, \code{v}, \code{N}, \code{k}.
+  coding), and \code{t}, \code{v} (a single integer for uniform
+  arrays, an integer vector of per-column symbol counts for
+  mixed-level arrays), \code{N}, \code{k}.
 }
 \description{
-  Checks that an \eqn{N \times k} array over \eqn{v} symbols covers
-  every \eqn{t}-way interaction: for every choice of \eqn{t} columns
-  and every one of the \eqn{v^t} value combinations, at least one row
-  exhibits that combination. This is the certificate check for a
-  covering array, run in compiled C at speeds suitable for large
-  arrays and strengths.
+  Checks that an \eqn{N \times k} array covers every \eqn{t}-way
+  interaction: for every choice of \eqn{t} columns and every
+  combination of their symbols, at least one row exhibits that
+  combination. This is the certificate check for a covering array, run
+  in compiled C at speeds suitable for large arrays and strengths.
+
+  Both uniform arrays (every column has \eqn{v} symbols, \eqn{v^t}
+  combinations per column set) and mixed-level arrays (column \eqn{i}
+  has its own \eqn{v_i} symbols, \eqn{\prod v_i} combinations per
+  column set) are supported; a uniform array is the degenerate
+  mixed-radix case in which all radices coincide.
 }
 \examples{
 ca <- rbind(c(0,0,0), c(0,1,1), c(1,0,1), c(1,1,0))
 ca_verify(ca, t = 2)          # a covering array of strength 2
 ca_verify(ca[-1, ], t = 2)    # removing a run breaks coverage
+
+# a mixed-level array: one 3-level and two 2-level columns
+mca <- as.matrix(expand.grid(0:2, 0:1, 0:1))
+ca_verify(mca, t = 2, v = c(3, 2, 2))
+ca_verify(mca, t = 2)   # the default infers each column's count
 }
