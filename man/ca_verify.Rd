@@ -29,7 +29,10 @@ ca_verify(x, t, v = NULL, threads = NULL, report = 10L)
     for small jobs, capped during CRAN checks. Override with
     \code{options(caverify.threads = n)} or this argument. Long runs
     are interruptible without aborting R.}
-  \item{report}{maximum number of missing-tuple examples to collect.}
+  \item{report}{maximum number of missing-tuple examples to collect.
+    The examples are the first column sets with a gap in
+    lexicographic order, each with its smallest missing value
+    combination, whatever the number of threads.}
 }
 \value{
   An object of class \code{ca_verify}: a list with \code{covered}
@@ -38,7 +41,8 @@ ca_verify(x, t, v = NULL, threads = NULL, report = 10L)
   column indices, the rest the missing value combination in the input
   coding), and \code{t}, \code{v} (a single integer for uniform
   arrays, an integer vector of per-column symbol counts for
-  mixed-level arrays), \code{N}, \code{k}.
+  mixed-level arrays), \code{N}, \code{k}, and \code{kernel}, the
+  method used (\code{"prefix"} or \code{"direct"}, see Details).
 }
 \description{
   Checks that an \eqn{N \times k} array covers every \eqn{t}-way
@@ -52,6 +56,28 @@ ca_verify(x, t, v = NULL, threads = NULL, report = 10L)
   has its own \eqn{v_i} symbols, \eqn{\prod v_i} combinations per
   column set) are supported; a uniform array is the degenerate
   mixed-radix case in which all radices coincide.
+}
+\details{
+  Two exact methods are implemented, and both give identical results.
+
+  The \code{"prefix"} method (since 0.3.0) writes every set of
+  \eqn{t} columns as its \eqn{t-1} smallest columns \eqn{P} plus its
+  largest column \eqn{d}. For a fixed \eqn{P} the rows are grouped by
+  their values on \eqn{P}, and one pass over each group, with one bit
+  per column, decides the coverage of \eqn{P \cup \{d\}} for every
+  later column \eqn{d} at once, 64 columns per machine word. On large
+  arrays this is many times faster than checking each column set on
+  its own; on the strength-4 binary arrays used in testing it was
+  about 40 to 50 times faster than version 0.2.0 at a few hundred
+  columns, with the advantage growing with the number of columns.
+
+  The \code{"direct"} method (the method of versions 0.1.x and
+  0.2.x) checks each column set on its own. It is used when the
+  prefix method would need more than
+  \code{getOption("caverify.maxmem", 2^30)} bytes, or for more than
+  64 symbols in a column. \code{options(caverify.kernel = "direct")}
+  or \code{"prefix"} forces a method (\code{"auto"}, the default,
+  chooses); this is meant for testing and comparison.
 }
 \examples{
 ca <- rbind(c(0,0,0), c(0,1,1), c(1,0,1), c(1,1,0))

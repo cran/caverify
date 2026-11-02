@@ -1,7 +1,7 @@
 Package: caverify
 Type: Package
 Title: Fast Strength-t Coverage Verification for Covering Arrays
-Version: 0.2.0
+Version: 0.3.0
 Authors@R: person("Christopher", "Smolen",
     email = "chrispbsmolen@gmail.com", role = c("aut", "cre"))
 Description: Verifies that an array covers every t-way interaction, the
@@ -9,7 +9,10 @@ Description: Verifies that an array covers every t-way interaction, the
     optional 'OpenMP' threading. Supports uniform and mixed-level
     (per-column symbol counts) arrays. Missing values mark flexible
     ("don't care") entries, which contribute nothing to coverage, so a
-    verified array remains covering however they are filled. Designed
+    verified array remains covering however they are filled. Each set of
+    t-1 columns is checked against all later columns at once, one bit
+    per column, which is many times faster than checking every set of t
+    columns on its own on large arrays. Designed
     to be easy to embed in other packages: a single C file with a
     registered .Call entry point and one R wrapper.
 License: MIT + file LICENSE
@@ -19,8 +22,8 @@ Encoding: UTF-8
 Language: en-US
 Imports: parallel
 NeedsCompilation: yes
-Packaged: 2026-09-19 22:25:58 UTC; axviam
+Packaged: 2026-11-02 19:38:58 UTC; axviam
 Author: Christopher Smolen [aut, cre]
 Maintainer: Christopher Smolen <chrispbsmolen@gmail.com>
 Repository: CRAN
-Date/Publication: 2026-09-20 02:50:02 UTC
+Date/Publication: 2026-11-02 20:30:08 UTC

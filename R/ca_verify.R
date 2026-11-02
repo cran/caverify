@@ -43,6 +43,9 @@
 #'   Effective when compiled with OpenMP; otherwise single-threaded.
 #'   Long runs are interruptible (Escape or Ctrl-C).
 #' @param report maximum number of missing-tuple examples to collect.
+#'   The examples are the first column sets with a gap in lexicographic
+#'   order, each with its smallest missing value combination, whatever
+#'   the number of threads.
 #' @return An object of class \code{ca_verify}: a list with elements
 #'   \code{covered} (logical), \code{colsets} (number of column sets
 #'   checked), \code{gaps} (column sets with at least one missing
@@ -52,7 +55,8 @@
 #'   the missing value combination in the input coding), and the call
 #'   parameters \code{t}, \code{v} (a single integer for uniform
 #'   arrays, an integer vector of per-column symbol counts for
-#'   mixed-level arrays), \code{N}, \code{k}.
+#'   mixed-level arrays), \code{N}, \code{k}, and \code{kernel}, the
+#'   method used ("prefix" or "direct"; see the help page for details).
 #' @examples
 #' ## a strength-2 covering array on 3 two-level factors in 4 runs
 #' ca <- rbind(c(0,0,0), c(0,1,1), c(1,0,1), c(1,1,0))
@@ -139,7 +143,11 @@ ca_verify <- function(x, t, v = NULL, threads = NULL, report = 10L) {
     if (shift) x <- x - 1L
 
     nt <- resolve_threads(threads, k, t)
-    res <- .Call(C_ca_verify, x, t, vs, nt, as.integer(report))
+    kern <- match(getOption("caverify.kernel", "auto"),
+                  c("auto", "direct", "prefix")) - 1L
+    if (is.na(kern)) stop("option caverify.kernel must be \"auto\", \"direct\" or \"prefix\"")
+    maxmem <- as.numeric(getOption("caverify.maxmem", 2^30))
+    res <- .Call(C_ca_verify, x, t, vs, nt, as.integer(report), kern, maxmem)
     if (shift && nrow(res$examples) > 0L) {
         tt <- ncol(res$examples) / 2L
         res$examples[, (tt + 1L):(2L * tt)] <-

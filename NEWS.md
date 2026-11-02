@@ -1,3 +1,31 @@
+# caverify 0.3.0
+
+* A second exact method, used by default where it fits in memory. Every
+  set of t columns is written as its t-1 smallest columns plus its
+  largest column. For each set of t-1 columns the rows are grouped by
+  their values on those columns, and one pass over each group, one bit
+  per column, decides the coverage of all the later columns at once. On
+  the strength-4 binary arrays used in testing it was about 40 to 50
+  times faster than 0.2.0 at a few hundred columns, and the gain grows
+  with the number of columns. The method is the one of `ca_verify.c`
+  (version 2) in ca-tools, described in `tools/RESEARCH_ca_verify.md`
+  there; this is a portable rewrite of it for R, with mixed levels and
+  the NA rule of 0.2.0.
+* The method of 0.2.0 is kept and is used where the new one would need
+  more than `getOption("caverify.maxmem", 2^30)` bytes or a column has
+  more than 64 symbols. `options(caverify.kernel = "direct")` or
+  `"prefix"` forces one of them, for testing and comparison. The result
+  names the method used in a new element `kernel`.
+* Results are unchanged: `covered`, `colsets`, `gaps` and
+  `missing_tuples` agree with 0.2.0 on every array tested (random
+  uniform, mixed-level and binary arrays with and without NAs, strengths
+  1 to 6, and covering arrays from 'CAs' with a row removed, an entry
+  changed or an entry set to NA).
+* The examples are now the first column sets with a gap in
+  lexicographic order, each with its smallest missing value combination,
+  for any number of threads. In 0.2.0 this held for one thread; with
+  several threads the examples chosen depended on scheduling.
+
 # caverify 0.2.0
 
 * The default `v = NULL` now infers per-column symbol counts from each

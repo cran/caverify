@@ -192,3 +192,49 @@ stopifnot(inherits(try(ca_verify(plan, 2, v = c(3, 2)), silent = TRUE), "try-err
 stopifnot(inherits(try(ca_verify(plan, 2, v = c(3, 2, 0)), silent = TRUE), "try-error"))
 
 cat("all mixed-level caverify tests passed\n")
+
+## ---- two methods (0.3.0) ----
+
+## 18. the prefix and direct methods agree exactly, examples included,
+## on random uniform, mixed-level and binary arrays with and without
+## NAs, for one and two threads; wide arrays cross the 64- and
+## 256-column word and chunk boundaries of the prefix method
+run_kernel <- function(kern, ...) {
+    old <- options(caverify.kernel = kern); on.exit(options(old))
+    ca_verify(...)
+}
+set.seed(20261102)
+for (i in 1:60) {
+    t <- sample(1:4, 1, prob = c(.1, .35, .35, .2))
+    k <- if (i %% 6 == 0) sample(250:300, 1) else sample(max(t, 3):40, 1)
+    if (t == 4) k <- min(k, 30)
+    mode <- i %% 3
+    vs <- if (mode == 0) rep(2L, k) else if (mode == 1) rep(sample(3:4, 1), k)
+          else sample(2:4, k, replace = TRUE)
+    N <- sample(4:40, 1)
+    x <- sapply(vs, function(v) sample.int(v, N, replace = TRUE) - 1L)
+    x[1, ] <- 0L                     ## pin the coding to 0-based
+    if (i %% 4 == 0) x[sample(length(x), 3)] <- NA
+    th <- 1 + i %% 2
+    a <- run_kernel("direct", x, t, v = vs, threads = th, report = 5L)
+    b <- run_kernel("prefix", x, t, v = vs, threads = th, report = 5L)
+    stopifnot(identical(a$covered, b$covered), a$colsets == b$colsets,
+              a$colsets == choose(k, t), a$gaps == b$gaps,
+              a$missing_tuples == b$missing_tuples,
+              identical(a$examples, b$examples),
+              a$kernel == "direct", b$kernel == "prefix")
+}
+
+## 19. a covering array stays covering under both methods; removing a
+## row breaks it identically
+oa <- as.matrix(expand.grid(0:2, 0:2))          ## OA(9; 2, 4, 3)
+oa <- cbind(oa, (oa[, 1] + oa[, 2]) %% 3, (oa[, 1] + 2 * oa[, 2]) %% 3)
+storage.mode(oa) <- "integer"
+for (kern in c("direct", "prefix")) {
+    r <- run_kernel(kern, oa, 2, v = 3)
+    stopifnot(isTRUE(r$covered), r$colsets == 6)
+    r <- run_kernel(kern, oa[-1, ], 2, v = 3)
+    stopifnot(!r$covered, r$gaps == 6, r$missing_tuples == 6)
+}
+
+cat("all two-method caverify tests passed\n")
